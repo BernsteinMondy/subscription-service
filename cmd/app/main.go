@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/BernsteinMondy/subscription-service/internal/controller"
+	"github.com/BernsteinMondy/subscription-service/internal/middleware"
 	"github.com/BernsteinMondy/subscription-service/internal/repository"
 	"github.com/BernsteinMondy/subscription-service/internal/service"
 	"github.com/BernsteinMondy/subscription-service/pkg/database"
@@ -71,10 +72,13 @@ func run() (err error) {
 	// Map handlers
 	ctrl.MapHandlers(mux)
 
+	// Middleware
+	handlerWithMw := middleware.LoggingMiddleware(mux)
+
 	// New HTTP server
 	httpServer := &http.Server{
 		Addr:    cfg.HTTPServer.ListenAddr,
-		Handler: mux,
+		Handler: handlerWithMw,
 	}
 
 	wg := &sync.WaitGroup{}
