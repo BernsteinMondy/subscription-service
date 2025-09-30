@@ -70,9 +70,18 @@ func (r *repository) DeleteSubscriptionByID(ctx context.Context, id uuid.UUID) e
 func (r *repository) UpdateSubscription(ctx context.Context, id uuid.UUID, data *entity.UpdateSubscriptionData) error {
 	const query = `UPDATE app.subscriptions SET price = $1, service_name = $2, start_date = $3, end_date = $4 WHERE id = $3`
 
-	_, err := r.db.ExecContext(ctx, query, data.Price, data.EndDate, id)
+	res, err := r.db.ExecContext(ctx, query, data.Price, data.EndDate, id)
 	if err != nil {
 		return fmt.Errorf("exec sql query: %w", err)
+	}
+
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return ErrRepoNotFound
 	}
 
 	return nil

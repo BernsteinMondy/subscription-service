@@ -70,6 +70,9 @@ func (s *service) CancelSubscription(ctx context.Context, id uuid.UUID) error {
 func (s *service) UpdateSubscription(ctx context.Context, id uuid.UUID, data *entity.UpdateSubscriptionData) error {
 	err := s.repo.UpdateSubscription(ctx, id, data)
 	if err != nil {
+		if errors.Is(err, repo.ErrRepoNotFound) {
+			return ErrNotFound
+		}
 		return fmt.Errorf("repo: update subscription: %w", err)
 	}
 
