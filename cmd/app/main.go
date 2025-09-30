@@ -14,7 +14,6 @@ import (
 	"log/slog"
 	"net/http"
 	"os/signal"
-	"sync"
 	"syscall"
 	"time"
 )
@@ -39,64 +38,44 @@ func run() (err error) {
 	if err != nil {
 		return fmt.Errorf("load config: %v", err)
 	}
-	slog.Info("Config loaded:", slog.Any("config", cfg))
+	slog.Info("Config loaded", slog.Any("config", cfg))
 
 	slog.Info("Creating new database connection...")
 	db, err := newDatabaseConnection(cfg.DB)
 	if err != nil {
-		return fmt.Errorf("newDatabaseConnection() returned error: %v", err)
+		return fmt.Errorf("newDatabaseConnection: %w", err)
 	}
 	slog.Info("Database connection created")
+
 	defer func() {
 		slog.Info("Closing database connection...")
-		closeErr := db.Close()
-		if closeErr != nil {
-			err = errors.Join(err, fmt.Errorf("closing database connection: %w", closeErr))
-		} else {
-			slog.Info("Database connection closed")
+		if closeErr := db.Close(); closeErr != nil {
+			slog.Error("Failed to close database", slog.Any("error", closeErr))
 		}
 	}()
 
-	// New repository
+	// Repository - Service - Controller
 	repo := repository.New(db)
-
-	// New service
 	srvc := service.NewService(repo)
-
-	// New controller
 	ctrl := controller.New(srvc)
 
-	// New HTTP multiplexer
+	// HTTP mux and middleware
 	mux := http.NewServeMux()
-
-	// Map handlers
 	ctrl.MapHandlers(mux)
-
-	// Middleware
 	handlerWithMw := middleware.LoggingMiddleware(mux)
 
-	// New HTTP server
+	// HTTP server
 	httpServer := &http.Server{
 		Addr:    cfg.HTTPServer.ListenAddr,
 		Handler: handlerWithMw,
 	}
 
-	wg := &sync.WaitGroup{}
+	if err = launchHTTPServer(ctx, httpServer); err != nil {
+		slog.Error("HTTP server error", slog.Any("error", err))
+		return err
+	}
 
-	wg.Add(1)
-	go func(ctx context.Context, server *http.Server) {
-		defer wg.Done()
-		defer slog.Info("HTTP server shutdown")
-
-		slog.Info("Launching HTTP server...")
-		launchErr := launchHTTPServer(ctx, httpServer)
-		if launchErr != nil {
-			err = errors.Join(err, launchErr)
-		}
-	}(ctx, httpServer)
-
-	wg.Wait()
-	<-ctx.Done()
+	slog.Info("Server stopped gracefully")
 	return nil
 }
 
@@ -114,30 +93,32 @@ func newDatabaseConnection(c DB) (*sql.DB, error) {
 }
 
 func launchHTTPServer(ctx context.Context, httpServer *http.Server) error {
-	errCh := make(chan error, 1)
+	serverErr := make(chan error, 1)
 
 	go func() {
-		launchErr := httpServer.ListenAndServe()
-		if launchErr != nil {
-			errCh <- fmt.Errorf("launch http server: %v", launchErr)
+		slog.Info("Starting HTTP server", slog.String("address", httpServer.Addr))
+		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serverErr <- fmt.Errorf("listen on %s: %w", httpServer.Addr, err)
+		} else {
+			serverErr <- nil
 		}
-
-		return
 	}()
 
-	select {
-	case err := <-errCh:
-		return err
-	case <-ctx.Done():
-	}
+	<-ctx.Done()
+	slog.Info("Shutdown signal received")
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	err := httpServer.Shutdown(shutdownCtx)
-	if err != nil {
+	if err := httpServer.Shutdown(shutdownCtx); err != nil {
+		slog.Error("Error during server shutdown", slog.Any("error", err))
 		return fmt.Errorf("shutdown http server: %w", err)
 	}
 
+	if err := <-serverErr; err != nil {
+		return err
+	}
+
+	slog.Info("Server shutdown complete")
 	return nil
 }

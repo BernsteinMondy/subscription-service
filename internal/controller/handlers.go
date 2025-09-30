@@ -133,6 +133,17 @@ func (c *controller) getSubscription(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
+// CreateSubscription godoc
+// @Summary Create a new subscription
+// @Description Create a new subscription for a user
+// @Tags subscriptions
+// @Accept json
+// @Produce json
+// @Param subscription body entity.Subscription true "Subscription data"
+// @Success 201 {object} entity.Subscription
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /subscriptions [post]
 func (c *controller) postSubscription(w http.ResponseWriter, r *http.Request) {
 	var req createSubscriptionReadDTO
 
