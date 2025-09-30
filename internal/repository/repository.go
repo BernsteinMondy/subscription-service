@@ -136,7 +136,7 @@ func (r *repository) GetAllSubscriptionsFilter(ctx context.Context, filter *enti
 		}
 	}()
 
-	var subscriptions []entity.Subscription
+	subscriptions := make([]entity.Subscription, 0)
 
 	for rows.Next() {
 		var subscription entity.Subscription

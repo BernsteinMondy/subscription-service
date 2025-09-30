@@ -25,7 +25,7 @@ func (c *controller) getSubscriptions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var subscriptionsResult []getSubscriptionReadDTO
+	subscriptionsResult := make([]getSubscriptionReadDTO, 0, len(subs))
 	for _, sub := range subs {
 		subscriptionsResult = append(subscriptionsResult, getSubscriptionReadDTO{
 			ID:          sub.ID.String(),
@@ -47,7 +47,6 @@ func (c *controller) getSubscriptions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
 	return
 }
 
@@ -94,7 +93,6 @@ func (c *controller) getSubscriptionsTotalPrice(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
 	return
 }
 
