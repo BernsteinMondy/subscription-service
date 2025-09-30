@@ -18,7 +18,37 @@ func (c *controller) MapHandlers(mux *http.ServeMux) {
 }
 
 func (c *controller) getSubscriptions(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	subs, err := c.service.GetAllSubscriptions(ctx)
+	if err != nil {
+		handleError(w, err)
+		return
+	}
 
+	var subscriptionsResult []getSubscriptionReadDTO
+	for _, sub := range subs {
+		subscriptionsResult = append(subscriptionsResult, getSubscriptionReadDTO{
+			ID:          sub.ID.String(),
+			UserID:      sub.UserID.String(),
+			ServiceName: sub.ServiceName,
+			Price:       int(sub.Price),
+			StartDate:   sub.StartDate.Format(timeFormat),
+			EndDate:     sub.EndDate.Format(timeFormat),
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	err = json.NewEncoder(w).Encode(map[string][]getSubscriptionReadDTO{
+		"subscriptions": subscriptionsResult,
+	})
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	return
 }
 
 func (c *controller) getSubscriptionsTotalPrice(w http.ResponseWriter, r *http.Request) {
@@ -84,8 +114,6 @@ func (c *controller) getSubscription(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-
 	var resp = getSubscriptionReadDTO{
 		ID:          sub.ID.String(),
 		UserID:      sub.UserID.String(),
@@ -94,6 +122,8 @@ func (c *controller) getSubscription(w http.ResponseWriter, r *http.Request) {
 		StartDate:   sub.StartDate.Format(timeFormat),
 		EndDate:     sub.EndDate.Format(timeFormat),
 	}
+
+	w.Header().Set("Content-Type", "application/json")
 
 	err = json.NewEncoder(w).Encode(&resp)
 	if err != nil {
@@ -142,7 +172,9 @@ func (c *controller) postSubscription(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(w).Encode(map[string]string{"id": id.String()})
+	err = json.NewEncoder(w).Encode(map[string]string{
+		"id": id.String(),
+	})
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -169,6 +201,7 @@ func (c *controller) deleteSubscription(w http.ResponseWriter, r *http.Request) 
 	}
 
 	w.WriteHeader(http.StatusOK)
+	return
 }
 
 func (c *controller) putSubscription(w http.ResponseWriter, r *http.Request) {
@@ -180,7 +213,7 @@ func (c *controller) putSubscription(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req updateSubscriptionReadDTO
+	var req updateSubscriptionCreateDTO
 
 	err = json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
