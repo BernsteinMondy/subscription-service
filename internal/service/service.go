@@ -31,6 +31,9 @@ func NewService(repo repository) *service {
 func (s *service) GetSubscription(ctx context.Context, id uuid.UUID) (*entity.Subscription, error) {
 	sub, err := s.repo.GetSubscriptionByID(ctx, id)
 	if err != nil {
+		if errors.Is(err, repo.ErrRepoNotFound) {
+			return nil, ErrNotFound
+		}
 		return nil, fmt.Errorf("repo: get subscription by id: %w", err)
 	}
 
@@ -79,10 +82,24 @@ func (s *service) UpdateSubscription(ctx context.Context, id uuid.UUID, data *en
 	return nil
 }
 
-func (s *service) GetSubscriptionsTotalSumFilter(ctx context.Context, filter *entity.GetSubscriptionsFilter) ([]entity.Subscription, error) {
+func (s *service) GetSubscriptionsTotalSumFilter(ctx context.Context, filter *entity.GetSubscriptionsFilter) (int32, error) {
 	subs, err := s.repo.GetAllSubscriptionsFilter(ctx, filter)
 	if err != nil {
-		return nil, fmt.Errorf("repo: get all subscriptions with filter: %w", err)
+		return 0, fmt.Errorf("repo: get all subscriptions with filter: %w", err)
+	}
+
+	totalPrice := int32(0)
+	for _, sub := range subs {
+		totalPrice += sub.Price
+	}
+
+	return totalPrice, nil
+}
+
+func (s *service) GetAllSubscriptions(ctx context.Context) ([]entity.Subscription, error) {
+	subs, err := s.repo.GetAllSubscriptionsFilter(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("repo: get all subscriptions: %w", err)
 	}
 
 	return subs, nil

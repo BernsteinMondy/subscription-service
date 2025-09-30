@@ -10,6 +10,7 @@ import (
 func (c *controller) MapHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("GET /subscriptions", c.getSubscriptions)
 	mux.HandleFunc("GET /subscriptions/{id}", c.getSubscription)
+	mux.HandleFunc("GET /subscriptions/price", c.getSubscriptionsTotalPrice)
 
 	mux.HandleFunc("POST /subscriptions", c.postSubscription)
 	mux.HandleFunc("DELETE /subscriptions/{id}", c.deleteSubscription)
@@ -17,6 +18,10 @@ func (c *controller) MapHandlers(mux *http.ServeMux) {
 }
 
 func (c *controller) getSubscriptions(w http.ResponseWriter, r *http.Request) {
+
+}
+
+func (c *controller) getSubscriptionsTotalPrice(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 
 	serviceName := query.Get("service_name")
@@ -44,26 +49,16 @@ func (c *controller) getSubscriptions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	subscriptions, err := c.service.GetSubscriptionsTotalSumFilter(ctx, filter)
+	totalPrice, err := c.service.GetSubscriptionsTotalSumFilter(ctx, filter)
 	if err != nil {
 		handleError(w, err)
 		return
 	}
 
-	subscriptionsResult := make([]*getSubscriptionReadDTO, 0, len(subscriptions))
-	for _, subscription := range subscriptions {
-		subscriptionsResult = append(subscriptionsResult, &getSubscriptionReadDTO{
-			ID:          subscription.ID.String(),
-			UserID:      subscription.UserID.String(),
-			ServiceName: subscription.ServiceName,
-			Price:       int(subscription.Price),
-			StartDate:   subscription.StartDate.Format(timeFormat),
-			EndDate:     subscription.EndDate.Format(timeFormat),
-		})
-	}
-
 	w.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(w).Encode(subscriptionsResult)
+	err = json.NewEncoder(w).Encode(map[string]interface{}{
+		"total_price": totalPrice,
+	})
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return

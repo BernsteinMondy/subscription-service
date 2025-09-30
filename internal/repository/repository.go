@@ -23,7 +23,7 @@ func (r *repository) CreateSubscription(ctx context.Context, subscription *entit
 
 	_, err := r.db.ExecContext(ctx, query, subscription.ID, subscription.UserID, subscription.ServiceName, subscription.Price, subscription.StartDate, subscription.EndDate)
 	if err != nil {
-		return uuid.Nil, err
+		return uuid.Nil, fmt.Errorf("exec sql query: %w", err)
 	}
 
 	return subscription.ID, nil
@@ -39,7 +39,7 @@ func (r *repository) GetSubscriptionByID(ctx context.Context, id uuid.UUID) (*en
 	err := r.db.QueryRowContext(ctx, query, id).Scan(&res.UserID, &res.ServiceName, &res.Price, &res.StartDate, &res.EndDate)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, nil
+			return nil, ErrRepoNotFound
 		}
 		return nil, fmt.Errorf("query row: %w", err)
 	}
@@ -68,9 +68,9 @@ func (r *repository) DeleteSubscriptionByID(ctx context.Context, id uuid.UUID) e
 }
 
 func (r *repository) UpdateSubscription(ctx context.Context, id uuid.UUID, data *entity.UpdateSubscriptionData) error {
-	const query = `UPDATE app.subscriptions SET price = $1, service_name = $2, start_date = $3, end_date = $4 WHERE id = $3`
+	const query = `UPDATE app.subscriptions SET price = $1, service_name = $2, start_date = $3, end_date = $4 WHERE id = $5`
 
-	res, err := r.db.ExecContext(ctx, query, data.Price, data.EndDate, id)
+	res, err := r.db.ExecContext(ctx, query, data.Price, data.ServiceName, data.StartDate, data.EndDate, id)
 	if err != nil {
 		return fmt.Errorf("exec sql query: %w", err)
 	}
@@ -96,25 +96,26 @@ func (r *repository) GetAllSubscriptionsFilter(ctx context.Context, filter *enti
 
 	queryBuilder.WriteString(`SELECT id, user_id, service_name, price, start_date, end_date FROM app.subscriptions`)
 
-	// Собираем условия
-	if filter.ServiceName != "" {
-		conditions = append(conditions, fmt.Sprintf("service_name = $%d", len(args)+1))
-		args = append(args, filter.ServiceName)
-	}
+	if filter != nil {
+		if filter.ServiceName != "" {
+			conditions = append(conditions, fmt.Sprintf("service_name = $%d", len(args)+1))
+			args = append(args, filter.ServiceName)
+		}
 
-	if filter.UserID != uuid.Nil {
-		conditions = append(conditions, fmt.Sprintf("user_id = $%d", len(args)+1))
-		args = append(args, filter.UserID)
-	}
+		if filter.UserID != uuid.Nil {
+			conditions = append(conditions, fmt.Sprintf("user_id = $%d", len(args)+1))
+			args = append(args, filter.UserID)
+		}
 
-	if !filter.StartDate.IsZero() {
-		conditions = append(conditions, fmt.Sprintf("start_date >= $%d", len(args)+1))
-		args = append(args, filter.StartDate)
-	}
+		if !filter.StartDate.IsZero() {
+			conditions = append(conditions, fmt.Sprintf("start_date >= $%d", len(args)+1))
+			args = append(args, filter.StartDate)
+		}
 
-	if !filter.EndDate.IsZero() {
-		conditions = append(conditions, fmt.Sprintf("end_date <= $%d", len(args)+1))
-		args = append(args, filter.EndDate)
+		if !filter.EndDate.IsZero() {
+			conditions = append(conditions, fmt.Sprintf("end_date <= $%d", len(args)+1))
+			args = append(args, filter.EndDate)
+		}
 	}
 
 	if len(conditions) > 0 {
