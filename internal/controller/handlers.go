@@ -165,6 +165,11 @@ func (c *controller) postSubscription(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if req.Price < 0 {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
 	data := &entity.CreateSubscriptionData{
 		UserID:      userID,
 		ServiceName: req.ServiceName,
