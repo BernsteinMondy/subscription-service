@@ -2,12 +2,18 @@ package controller
 
 import (
 	"encoding/json"
+	_ "github.com/BernsteinMondy/subscription-service/docs"
 	"github.com/BernsteinMondy/subscription-service/internal/entity"
 	"github.com/google/uuid"
+	"github.com/swaggo/http-swagger"
 	"net/http"
 )
 
 func (c *controller) MapHandlers(mux *http.ServeMux) {
+	mux.HandleFunc("GET /swagger/", httpSwagger.Handler(
+		httpSwagger.URL("/swagger/doc.json"),
+	))
+
 	mux.HandleFunc("GET /subscriptions", c.getSubscriptions)
 	mux.HandleFunc("GET /subscriptions/{id}", c.getSubscription)
 	mux.HandleFunc("GET /subscriptions/price", c.getSubscriptionsTotalPrice)
@@ -17,6 +23,14 @@ func (c *controller) MapHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /subscriptions/{id}", c.putSubscription)
 }
 
+// GetSubscriptions godoc
+// @Summary Get all subscriptions
+// @Description Retrieve all subscriptions
+// @Tags subscriptions
+// @Produce json
+// @Success 200 {object} getSubscriptionsResponseDTO "Array of subscriptions"
+// @Failure 500 "Internal Server Error - Returns only status code"
+// @Router /subscriptions [get]
 func (c *controller) getSubscriptions(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	subs, err := c.service.GetAllSubscriptions(ctx)
@@ -39,9 +53,10 @@ func (c *controller) getSubscriptions(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 
-	err = json.NewEncoder(w).Encode(map[string][]getSubscriptionReadDTO{
-		"subscriptions": subscriptionsResult,
-	})
+	var resp = getSubscriptionsResponseDTO{
+		Subscriptions: subscriptionsResult,
+	}
+	err = json.NewEncoder(w).Encode(resp)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -50,6 +65,19 @@ func (c *controller) getSubscriptions(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
+// GetSubscriptionsTotalPrice godoc
+// @Summary Get total price of subscriptions
+// @Description Calculate total price of subscriptions with filtering
+// @Tags subscriptions
+// @Produce json
+// @Param service_name query string false "Filter by Service name"
+// @Param user_id query string true "User ID" Format(uuid)
+// @Param start_date query string true "Start date (MM-YYYY)"
+// @Param end_date query string true "End date (MM-YYYY)"
+// @Success 200 {object} getTotalPriceResponseDTO "Total price of all the subscriptions"
+// @Failure 400 "Bad Request"
+// @Failure 500 "Internal Server Error"
+// @Router /subscriptions/price [get]
 func (c *controller) getSubscriptionsTotalPrice(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 
@@ -85,9 +113,11 @@ func (c *controller) getSubscriptionsTotalPrice(w http.ResponseWriter, r *http.R
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(w).Encode(map[string]interface{}{
-		"total_price": totalPrice,
-	})
+
+	var resp = getTotalPriceResponseDTO{
+		TotalPrice: int(totalPrice),
+	}
+	err = json.NewEncoder(w).Encode(resp)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -96,6 +126,17 @@ func (c *controller) getSubscriptionsTotalPrice(w http.ResponseWriter, r *http.R
 	return
 }
 
+// GetSubscription godoc
+// @Summary Get subscription by ID
+// @Description Retrieve a specific subscription by its ID
+// @Tags subscriptions
+// @Produce json
+// @Param id path string true "Subscription ID" Format(uuid)
+// @Success 200 {object} getSubscriptionReadDTO
+// @Failure 400 "Bad Request"
+// @Failure 404 "Not Found"
+// @Failure 500 "Internal Server Error"
+// @Router /subscriptions/{id} [get]
 func (c *controller) getSubscription(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
 
@@ -139,13 +180,13 @@ func (c *controller) getSubscription(w http.ResponseWriter, r *http.Request) {
 // @Tags subscriptions
 // @Accept json
 // @Produce json
-// @Param subscription body entity.Subscription true "Subscription data"
-// @Success 201 {object} entity.Subscription
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
+// @Param subscription body createSubscriptionRequestDTO true "Subscription data"
+// @Success 201 {object} createSubscriptionResponseDTO "Returns the ID of the created subscription"
+// @Failure 400 "Bad Request"
+// @Failure 500 "Internal Server Error"
 // @Router /subscriptions [post]
 func (c *controller) postSubscription(w http.ResponseWriter, r *http.Request) {
-	var req createSubscriptionReadDTO
+	var req createSubscriptionRequestDTO
 
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
@@ -186,9 +227,12 @@ func (c *controller) postSubscription(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(w).Encode(map[string]string{
-		"id": id.String(),
-	})
+
+	var resp = createSubscriptionResponseDTO{
+		ID: id.String(),
+	}
+
+	err = json.NewEncoder(w).Encode(resp)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -198,6 +242,16 @@ func (c *controller) postSubscription(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
+// DeleteSubscription godoc
+// @Summary Delete a subscription
+// @Description Cancel and remove a subscription by ID
+// @Tags subscriptions
+// @Param id path string true "Subscription ID" Format(uuid)
+// @Success 200 "OK"
+// @Failure 400 "Bad Request"
+// @Failure 404 "Not Found"
+// @Failure 500 "Internal Server Error"
+// @Router /subscriptions/{id} [delete]
 func (c *controller) deleteSubscription(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
 
@@ -218,6 +272,19 @@ func (c *controller) deleteSubscription(w http.ResponseWriter, r *http.Request) 
 	return
 }
 
+// UpdateSubscription godoc
+// @Summary Update a subscription
+// @Description Update an existing subscription by ID
+// @Tags subscriptions
+// @Accept json
+// @Produce json
+// @Param id path string true "Subscription ID (UUID)"
+// @Param subscription body updateSubscriptionCreateDTO true "Updated subscription data"
+// @Success 200 "OK"
+// @Failure 400 "Bad Request"
+// @Failure 404 "Not Found"
+// @Failure 500 "Internal Server Error"
+// @Router /subscriptions/{id} [put]
 func (c *controller) putSubscription(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
 
