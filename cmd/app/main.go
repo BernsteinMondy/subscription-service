@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/BernsteinMondy/subscription-service/internal/controller"
 	"github.com/BernsteinMondy/subscription-service/internal/middleware"
+	"github.com/BernsteinMondy/subscription-service/internal/migrations"
 	"github.com/BernsteinMondy/subscription-service/internal/repository"
 	"github.com/BernsteinMondy/subscription-service/internal/service"
 	"github.com/BernsteinMondy/subscription-service/pkg/database"
@@ -52,7 +53,32 @@ func run() (err error) {
 		if closeErr := db.Close(); closeErr != nil {
 			slog.Error("Failed to close database", slog.Any("error", closeErr))
 		}
+		slog.Info("Database connection closed")
 	}()
+
+	select {
+	case <-ctx.Done():
+		return nil
+	default:
+	}
+
+	// Migrations
+	if cfg.Migrations.Enabled {
+		slog.Info("Migrations enabled - running migrations")
+		err = migrations.Run(ctx, db, cfg.Migrations.Dir)
+		if err != nil {
+			return fmt.Errorf("run migrations: %w", err)
+		}
+		slog.Info("Successfully run migrations")
+	} else {
+		slog.Info("Migrations disabled - skipping migrations")
+	}
+
+	select {
+	case <-ctx.Done():
+		return nil
+	default:
+	}
 
 	// Repository - Service - Controller
 	repo := repository.New(db)

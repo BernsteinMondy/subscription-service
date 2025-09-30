@@ -8,6 +8,7 @@ RUN go build -o /app/bin/app $BUILD_TARGET
 
 FROM scratch
 
+COPY migrations/ /migrations
 COPY --from=builder /app/bin/app /
 
 ENTRYPOINT ["/app"]

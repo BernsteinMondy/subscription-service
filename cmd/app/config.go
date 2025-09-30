@@ -9,6 +9,7 @@ type (
 	Config struct {
 		HTTPServer HTTPServer `envPrefix:"HTTP_SERVER_"`
 		DB         DB         `envPrefix:"MAIN_DB_"`
+		Migrations Migrations `envPrefix:"MIGRATIONS_"`
 	}
 	HTTPServer struct {
 		ListenAddr string `env:"LISTEN_ADDR,notEmpty"`
@@ -20,6 +21,10 @@ type (
 		Password     string `env:"PASSWORD,notEmpty"`
 		DatabaseName string `env:"DATABASE_NAME,notEmpty"`
 		SSLMode      string `env:"SSL_MODE,notEmpty"`
+	}
+	Migrations struct {
+		Dir     string `env:"DIR,notEmpty"`
+		Enabled bool   `env:"ENABLED" envDefault:"false"`
 	}
 )
 
