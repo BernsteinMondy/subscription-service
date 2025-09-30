@@ -10,10 +10,12 @@ import (
 )
 
 type repository interface {
-	CreateSubscription(ctx context.Context, subscription *entity.Subscription) (uuid.UUID, error)
 	GetSubscriptionByID(ctx context.Context, id uuid.UUID) (*entity.Subscription, error)
-	DeleteSubscriptionByID(ctx context.Context, id uuid.UUID) error
 	GetAllSubscriptionsFilter(ctx context.Context, filter *entity.GetSubscriptionsFilter) ([]entity.Subscription, error)
+
+	CreateSubscription(ctx context.Context, subscription *entity.Subscription) (uuid.UUID, error)
+	UpdateSubscription(ctx context.Context, id uuid.UUID, data *entity.UpdateSubscriptionData) error
+	DeleteSubscriptionByID(ctx context.Context, id uuid.UUID) error
 }
 
 type service struct {
@@ -26,6 +28,15 @@ func NewService(repo repository) *service {
 	}
 }
 
+func (s *service) GetSubscription(ctx context.Context, id uuid.UUID) (*entity.Subscription, error) {
+	sub, err := s.repo.GetSubscriptionByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("repo: get subscription by id: %w", err)
+	}
+
+	return sub, nil
+}
+
 func (s *service) NewSubscription(ctx context.Context, data *entity.CreateSubscriptionData) (uuid.UUID, error) {
 	sub := &entity.Subscription{
 		ID:          uuid.New(),
@@ -33,6 +44,7 @@ func (s *service) NewSubscription(ctx context.Context, data *entity.CreateSubscr
 		ServiceName: data.ServiceName,
 		Price:       data.Price,
 		StartDate:   data.StartDate,
+		EndDate:     data.EndDate,
 	}
 
 	id, err := s.repo.CreateSubscription(ctx, sub)
@@ -50,6 +62,15 @@ func (s *service) CancelSubscription(ctx context.Context, id uuid.UUID) error {
 			return ErrNotFound
 		}
 		return fmt.Errorf("repo: delete subscription: %w", err)
+	}
+
+	return nil
+}
+
+func (s *service) UpdateSubscription(ctx context.Context, id uuid.UUID, data *entity.UpdateSubscriptionData) error {
+	err := s.repo.UpdateSubscription(ctx, id, data)
+	if err != nil {
+		return fmt.Errorf("repo: update subscription: %w", err)
 	}
 
 	return nil

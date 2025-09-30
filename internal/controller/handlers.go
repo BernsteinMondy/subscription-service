@@ -5,86 +5,15 @@ import (
 	"github.com/BernsteinMondy/subscription-service/internal/entity"
 	"github.com/google/uuid"
 	"net/http"
-	"time"
 )
-
-const timeFormat = "2006-01"
 
 func (c *controller) MapHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("GET /subscriptions", c.getSubscriptions)
+	mux.HandleFunc("GET /subscriptions/{id}", c.getSubscription)
+
 	mux.HandleFunc("POST /subscriptions", c.postSubscription)
 	mux.HandleFunc("DELETE /subscriptions/{id}", c.deleteSubscription)
-}
-
-func (c *controller) postSubscription(w http.ResponseWriter, r *http.Request) {
-	var req createSubscriptionDTO
-
-	err := json.NewDecoder(r.Body).Decode(&req)
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	userID, err := uuid.Parse(req.UserID)
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	startDate, err := time.Parse(req.StartDate, time.RFC3339)
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	endDate, err := time.Parse(req.EndDate, time.RFC3339)
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	data := &entity.CreateSubscriptionData{
-		UserID:      userID,
-		ServiceName: req.ServiceName,
-		Price:       int32(req.Price),
-		StartDate:   startDate,
-		EndDate:     endDate,
-	}
-
-	ctx := r.Context()
-	id, err := c.service.NewSubscription(ctx, data)
-	if err != nil {
-		handleError(w, err)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(w).Encode(id)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	w.WriteHeader(http.StatusCreated)
-}
-
-func (c *controller) deleteSubscription(w http.ResponseWriter, r *http.Request) {
-	idStr := r.PathValue("id")
-
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	ctx := r.Context()
-	err = c.service.CancelSubscription(ctx, id)
-	if err != nil {
-		handleError(w, err)
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
+	mux.HandleFunc("PUT /subscriptions/{id}", c.putSubscription)
 }
 
 func (c *controller) getSubscriptions(w http.ResponseWriter, r *http.Request) {
@@ -101,13 +30,7 @@ func (c *controller) getSubscriptions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	startDate, err := time.Parse(startDateStr, time.RFC3339)
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	endDate, err := time.Parse(endDateStr, time.RFC3339)
+	startDate, endDate, err := parseStartAndEndDate(startDateStr, endDateStr)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -145,4 +68,151 @@ func (c *controller) getSubscriptions(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+
+	w.WriteHeader(http.StatusOK)
+	return
+}
+
+func (c *controller) getSubscription(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	ctx := r.Context()
+	sub, err := c.service.GetSubscription(ctx, id)
+	if err != nil {
+		handleError(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	var resp = getSubscriptionReadDTO{
+		ID:          sub.ID.String(),
+		UserID:      sub.UserID.String(),
+		ServiceName: sub.ServiceName,
+		Price:       int(sub.Price),
+		StartDate:   sub.StartDate.Format(timeFormat),
+		EndDate:     sub.EndDate.Format(timeFormat),
+	}
+
+	err = json.NewEncoder(w).Encode(&resp)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	return
+}
+
+func (c *controller) postSubscription(w http.ResponseWriter, r *http.Request) {
+	var req createSubscriptionReadDTO
+
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	userID, err := uuid.Parse(req.UserID)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	startDate, endDate, err := parseStartAndEndDate(req.StartDate, req.EndDate)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	data := &entity.CreateSubscriptionData{
+		UserID:      userID,
+		ServiceName: req.ServiceName,
+		Price:       int32(req.Price),
+		StartDate:   startDate,
+		EndDate:     endDate,
+	}
+
+	ctx := r.Context()
+	id, err := c.service.NewSubscription(ctx, data)
+	if err != nil {
+		handleError(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	err = json.NewEncoder(w).Encode(map[string]string{"id": id.String()})
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+	return
+}
+
+func (c *controller) deleteSubscription(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	ctx := r.Context()
+	err = c.service.CancelSubscription(ctx, id)
+	if err != nil {
+		handleError(w, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+func (c *controller) putSubscription(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	var req updateSubscriptionReadDTO
+
+	err = json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	startDate, endDate, err := parseStartAndEndDate(req.StartDate, req.EndDate)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	data := &entity.UpdateSubscriptionData{
+		ServiceName: req.ServiceName,
+		Price:       int32(req.Price),
+		StartDate:   startDate,
+		EndDate:     endDate,
+	}
+
+	ctx := r.Context()
+	err = c.service.UpdateSubscription(ctx, id, data)
+	if err != nil {
+		handleError(w, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	return
 }

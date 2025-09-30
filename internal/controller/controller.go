@@ -7,9 +7,12 @@ import (
 )
 
 type service interface {
+	GetSubscriptionsTotalSumFilter(ctx context.Context, filter *entity.GetSubscriptionsFilter) ([]entity.Subscription, error)
+	GetSubscription(ctx context.Context, id uuid.UUID) (*entity.Subscription, error)
+
 	CancelSubscription(ctx context.Context, id uuid.UUID) error
 	NewSubscription(ctx context.Context, data *entity.CreateSubscriptionData) (uuid.UUID, error)
-	GetSubscriptionsTotalSumFilter(ctx context.Context, filter *entity.GetSubscriptionsFilter) ([]entity.Subscription, error)
+	UpdateSubscription(ctx context.Context, id uuid.UUID, data *entity.UpdateSubscriptionData) error
 }
 
 type controller struct {

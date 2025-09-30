@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/BernsteinMondy/subscription-service/internal/entity"
 	"github.com/google/uuid"
+	"strings"
 )
 
 type repository struct {
@@ -66,37 +67,53 @@ func (r *repository) DeleteSubscriptionByID(ctx context.Context, id uuid.UUID) e
 	return nil
 }
 
-func (r *repository) GetAllSubscriptionsFilter(ctx context.Context, filter *entity.GetSubscriptionsFilter) (_ []entity.Subscription, err error) {
-	var query = `SELECT id, user_id, service_name, price, start_date FROM app.subscriptions`
+func (r *repository) UpdateSubscription(ctx context.Context, id uuid.UUID, data *entity.UpdateSubscriptionData) error {
+	const query = `UPDATE app.subscriptions SET price = $1, service_name = $2, start_date = $3, end_date = $4 WHERE id = $3`
 
+	_, err := r.db.ExecContext(ctx, query, data.Price, data.EndDate, id)
+	if err != nil {
+		return fmt.Errorf("exec sql query: %w", err)
+	}
+
+	return nil
+}
+
+func (r *repository) GetAllSubscriptionsFilter(ctx context.Context, filter *entity.GetSubscriptionsFilter) (_ []entity.Subscription, err error) {
 	var (
-		args    = make([]interface{}, 0)
-		counter = 1
+		queryBuilder strings.Builder
+		args         []interface{}
+		conditions   []string
 	)
 
+	queryBuilder.WriteString(`SELECT id, user_id, service_name, price, start_date, end_date FROM app.subscriptions`)
+
+	// Собираем условия
 	if filter.ServiceName != "" {
-		query += fmt.Sprintf(" WHERE service_name = $%d", counter)
+		conditions = append(conditions, fmt.Sprintf("service_name = $%d", len(args)+1))
 		args = append(args, filter.ServiceName)
-		counter++
 	}
 
 	if filter.UserID != uuid.Nil {
-		query += fmt.Sprintf(" WHERE user_id = $%d", counter)
+		conditions = append(conditions, fmt.Sprintf("user_id = $%d", len(args)+1))
 		args = append(args, filter.UserID)
-		counter++
 	}
 
 	if !filter.StartDate.IsZero() {
-		query += fmt.Sprintf(" WHERE start_date >= $%d", counter)
+		conditions = append(conditions, fmt.Sprintf("start_date >= $%d", len(args)+1))
 		args = append(args, filter.StartDate)
-		counter++
 	}
 
 	if !filter.EndDate.IsZero() {
-		query += fmt.Sprintf(" WHERE end_date <= $%d", counter)
+		conditions = append(conditions, fmt.Sprintf("end_date <= $%d", len(args)+1))
 		args = append(args, filter.EndDate)
-		counter++
 	}
+
+	if len(conditions) > 0 {
+		queryBuilder.WriteString(" WHERE ")
+		queryBuilder.WriteString(strings.Join(conditions, " AND "))
+	}
+
+	query := queryBuilder.String()
 
 	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -109,18 +126,26 @@ func (r *repository) GetAllSubscriptionsFilter(ctx context.Context, filter *enti
 		}
 	}()
 
-	var (
-		subscriptions []entity.Subscription
-		subscription  entity.Subscription
-	)
+	var subscriptions []entity.Subscription
 
 	for rows.Next() {
-		err = rows.Scan(&subscription.ID, &subscription.UserID, &subscription.ServiceName, &subscription.Price, &subscription.StartDate)
+		var subscription entity.Subscription
+		err = rows.Scan(
+			&subscription.ID,
+			&subscription.UserID,
+			&subscription.ServiceName,
+			&subscription.Price,
+			&subscription.StartDate,
+			&subscription.EndDate,
+		)
 		if err != nil {
 			return nil, fmt.Errorf("scan row: %w", err)
 		}
-
 		subscriptions = append(subscriptions, subscription)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration: %w", err)
 	}
 
 	return subscriptions, nil

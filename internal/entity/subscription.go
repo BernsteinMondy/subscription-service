@@ -22,6 +22,13 @@ type CreateSubscriptionData struct {
 	EndDate     time.Time
 }
 
+type UpdateSubscriptionData struct {
+	ServiceName string
+	Price       int32
+	StartDate   time.Time
+	EndDate     time.Time
+}
+
 type GetSubscriptionsFilter struct {
 	UserID      uuid.UUID
 	ServiceName string

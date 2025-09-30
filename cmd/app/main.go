@@ -5,12 +5,10 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"github.com/BernsteinMondy/subscription-service/internal/config"
 	"github.com/BernsteinMondy/subscription-service/internal/controller"
 	"github.com/BernsteinMondy/subscription-service/internal/repository"
 	"github.com/BernsteinMondy/subscription-service/internal/service"
 	"github.com/BernsteinMondy/subscription-service/pkg/database"
-	"github.com/BernsteinMondy/subscription-service/pkg/server"
 	"log"
 	"log/slog"
 	"net/http"
@@ -36,7 +34,7 @@ func run() (err error) {
 	defer cancel()
 
 	slog.Info("Loading config...")
-	cfg, err := config.Load()
+	cfg, err := loadConfigFromEnv()
 	if err != nil {
 		return fmt.Errorf("load config: %v", err)
 	}
@@ -74,15 +72,15 @@ func run() (err error) {
 	ctrl.MapHandlers(mux)
 
 	// New HTTP server
-	httpServer, err := server.New(server.HTTP)
-	if err != nil {
-		return fmt.Errorf("create new http server %v", err)
+	httpServer := &http.Server{
+		Addr:    cfg.HTTPServer.ListenAddr,
+		Handler: mux,
 	}
 
 	wg := &sync.WaitGroup{}
 
 	wg.Add(1)
-	go func(ctx context.Context, server server.Server) {
+	go func(ctx context.Context, server *http.Server) {
 		defer wg.Done()
 		defer slog.Info("HTTP server shutdown")
 
@@ -98,24 +96,24 @@ func run() (err error) {
 	return nil
 }
 
-func newDatabaseConnection(c config.Database) (*sql.DB, error) {
+func newDatabaseConnection(c DB) (*sql.DB, error) {
 	dbCfg := &database.Config{
 		Host:     c.Host,
 		Port:     c.Port,
 		User:     c.User,
 		Password: c.Password,
-		DBName:   c.Name,
+		DBName:   c.DatabaseName,
 		SSLMode:  c.SSLMode,
 	}
 
 	return database.NewConnection(dbCfg)
 }
 
-func launchHTTPServer(ctx context.Context, httpServer server.Server) error {
+func launchHTTPServer(ctx context.Context, httpServer *http.Server) error {
 	errCh := make(chan error, 1)
 
 	go func() {
-		launchErr := httpServer.Launch()
+		launchErr := httpServer.ListenAndServe()
 		if launchErr != nil {
 			errCh <- fmt.Errorf("launch http server: %v", launchErr)
 		}
