@@ -13,6 +13,7 @@ type repository interface {
 	CreateSubscription(ctx context.Context, subscription *entity.Subscription) (uuid.UUID, error)
 	GetSubscriptionByID(ctx context.Context, id uuid.UUID) (*entity.Subscription, error)
 	DeleteSubscriptionByID(ctx context.Context, id uuid.UUID) error
+	GetAllSubscriptionsFilter(ctx context.Context, filter *entity.GetSubscriptionsFilter) ([]entity.Subscription, error)
 }
 
 type service struct {
@@ -55,5 +56,10 @@ func (s *service) CancelSubscription(ctx context.Context, id uuid.UUID) error {
 }
 
 func (s *service) GetSubscriptionsTotalSumFilter(ctx context.Context, filter *entity.GetSubscriptionsFilter) ([]entity.Subscription, error) {
-	return nil, nil
+	subs, err := s.repo.GetAllSubscriptionsFilter(ctx, filter)
+	if err != nil {
+		return nil, fmt.Errorf("repo: get all subscriptions with filter: %w", err)
+	}
+
+	return subs, nil
 }

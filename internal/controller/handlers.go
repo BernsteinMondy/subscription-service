@@ -8,6 +8,8 @@ import (
 	"time"
 )
 
+const timeFormat = "2006-01"
+
 func (c *controller) MapHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("GET /subscriptions", c.getSubscriptions)
 	mux.HandleFunc("POST /subscriptions", c.postSubscription)
@@ -35,11 +37,18 @@ func (c *controller) postSubscription(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	endDate, err := time.Parse(req.EndDate, time.RFC3339)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
 	data := &entity.CreateSubscriptionData{
 		UserID:      userID,
 		ServiceName: req.ServiceName,
 		Price:       int32(req.Price),
 		StartDate:   startDate,
+		EndDate:     endDate,
 	}
 
 	ctx := r.Context()
@@ -83,8 +92,22 @@ func (c *controller) getSubscriptions(w http.ResponseWriter, r *http.Request) {
 
 	serviceName := query.Get("service_name")
 	userIDStr := query.Get("user_id")
+	startDateStr := query.Get("start_date")
+	endDateStr := query.Get("end_date")
 
 	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	startDate, err := time.Parse(startDateStr, time.RFC3339)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	endDate, err := time.Parse(endDateStr, time.RFC3339)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -93,6 +116,8 @@ func (c *controller) getSubscriptions(w http.ResponseWriter, r *http.Request) {
 	filter := &entity.GetSubscriptionsFilter{
 		UserID:      userID,
 		ServiceName: serviceName,
+		StartDate:   startDate,
+		EndDate:     endDate,
 	}
 
 	ctx := r.Context()
@@ -109,7 +134,8 @@ func (c *controller) getSubscriptions(w http.ResponseWriter, r *http.Request) {
 			UserID:      subscription.UserID.String(),
 			ServiceName: subscription.ServiceName,
 			Price:       int(subscription.Price),
-			StartDate:   subscription.StartDate.Format(time.RFC3339),
+			StartDate:   subscription.StartDate.Format(timeFormat),
+			EndDate:     subscription.EndDate.Format(timeFormat),
 		})
 	}
 

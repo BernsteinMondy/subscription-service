@@ -11,6 +11,7 @@ type Subscription struct {
 	ServiceName string
 	Price       int32
 	StartDate   time.Time
+	EndDate     time.Time
 }
 
 type CreateSubscriptionData struct {
@@ -18,9 +19,12 @@ type CreateSubscriptionData struct {
 	ServiceName string
 	Price       int32
 	StartDate   time.Time
+	EndDate     time.Time
 }
 
 type GetSubscriptionsFilter struct {
 	UserID      uuid.UUID
 	ServiceName string
+	StartDate   time.Time
+	EndDate     time.Time
 }

@@ -74,7 +74,10 @@ func run() (err error) {
 	ctrl.MapHandlers(mux)
 
 	// New HTTP server
-	httpServer, _ := server.New(server.HTTP)
+	httpServer, err := server.New(server.HTTP)
+	if err != nil {
+		return fmt.Errorf("create new http server %v", err)
+	}
 
 	wg := &sync.WaitGroup{}
 

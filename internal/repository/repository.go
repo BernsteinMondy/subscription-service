@@ -18,9 +18,9 @@ func New(db *sql.DB) *repository {
 }
 
 func (r *repository) CreateSubscription(ctx context.Context, subscription *entity.Subscription) (uuid.UUID, error) {
-	const query = `INSERT INTO app.subscriptions (id, user_id, service_name, price, start_date) VALUES ($1, $2, $3, $4, $5)`
+	const query = `INSERT INTO app.subscriptions (id, user_id, service_name, price, start_date, end_date) VALUES ($1, $2, $3, $4, $5, $6)`
 
-	_, err := r.db.ExecContext(ctx, query, subscription.ID, subscription.UserID, subscription.ServiceName, subscription.Price, subscription.StartDate)
+	_, err := r.db.ExecContext(ctx, query, subscription.ID, subscription.UserID, subscription.ServiceName, subscription.Price, subscription.StartDate, subscription.EndDate)
 	if err != nil {
 		return uuid.Nil, err
 	}
@@ -29,13 +29,13 @@ func (r *repository) CreateSubscription(ctx context.Context, subscription *entit
 }
 
 func (r *repository) GetSubscriptionByID(ctx context.Context, id uuid.UUID) (*entity.Subscription, error) {
-	const query = `SELECT user_id, service_name, price, start_date FROM app.subscriptions WHERE id = $1`
+	const query = `SELECT user_id, service_name, price, start_date, end_date FROM app.subscriptions WHERE id = $1`
 
 	res := entity.Subscription{
 		ID: id,
 	}
 
-	err := r.db.QueryRowContext(ctx, query, id).Scan(&res.UserID, &res.ServiceName, &res.Price, &res.StartDate)
+	err := r.db.QueryRowContext(ctx, query, id).Scan(&res.UserID, &res.ServiceName, &res.Price, &res.StartDate, &res.EndDate)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
@@ -66,10 +66,39 @@ func (r *repository) DeleteSubscriptionByID(ctx context.Context, id uuid.UUID) e
 	return nil
 }
 
-func (r *repository) GetAllSubscriptions(ctx context.Context) (_ []entity.Subscription, err error) {
-	const query = `SELECT id, user_id, service_name, price, start_date FROM app.subscriptions`
+func (r *repository) GetAllSubscriptionsFilter(ctx context.Context, filter *entity.GetSubscriptionsFilter) (_ []entity.Subscription, err error) {
+	var query = `SELECT id, user_id, service_name, price, start_date FROM app.subscriptions`
 
-	rows, err := r.db.QueryContext(ctx, query)
+	var (
+		args    = make([]interface{}, 0)
+		counter = 1
+	)
+
+	if filter.ServiceName != "" {
+		query += fmt.Sprintf(" WHERE service_name = $%d", counter)
+		args = append(args, filter.ServiceName)
+		counter++
+	}
+
+	if filter.UserID != uuid.Nil {
+		query += fmt.Sprintf(" WHERE user_id = $%d", counter)
+		args = append(args, filter.UserID)
+		counter++
+	}
+
+	if !filter.StartDate.IsZero() {
+		query += fmt.Sprintf(" WHERE start_date >= $%d", counter)
+		args = append(args, filter.StartDate)
+		counter++
+	}
+
+	if !filter.EndDate.IsZero() {
+		query += fmt.Sprintf(" WHERE end_date <= $%d", counter)
+		args = append(args, filter.EndDate)
+		counter++
+	}
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("query rows: %w", err)
 	}
