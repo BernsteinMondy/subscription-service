@@ -71,7 +71,7 @@ func (c *controller) getSubscriptions(w http.ResponseWriter, r *http.Request) {
 // @Tags subscriptions
 // @Produce json
 // @Param service_name query string false "Filter by Service name"
-// @Param user_id query string true "User ID" Format(uuid)
+// @Param user_id query string false "User ID" Format(uuid)
 // @Param start_date query string true "Start date (MM-YYYY)"
 // @Param end_date query string true "End date (MM-YYYY)"
 // @Success 200 {object} getTotalPriceResponseDTO "Total price of all the subscriptions"
@@ -81,15 +81,24 @@ func (c *controller) getSubscriptions(w http.ResponseWriter, r *http.Request) {
 func (c *controller) getSubscriptionsTotalPrice(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 
-	serviceName := query.Get("service_name")
-	userIDStr := query.Get("user_id")
+	filter := &entity.GetSubscriptionsFilter{}
+
 	startDateStr := query.Get("start_date")
 	endDateStr := query.Get("end_date")
+	serviceName := query.Get("service_name")
 
-	userID, err := uuid.Parse(userIDStr)
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
+	if serviceName != "" {
+		filter.ServiceName = serviceName
+	}
+
+	userIDStr := query.Get("user_id")
+	if userIDStr != "" {
+		userID, err := uuid.Parse(userIDStr)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		filter.UserID = userID
 	}
 
 	startDate, endDate, err := parseStartAndEndDate(startDateStr, endDateStr)
@@ -98,12 +107,8 @@ func (c *controller) getSubscriptionsTotalPrice(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	filter := &entity.GetSubscriptionsFilter{
-		UserID:      userID,
-		ServiceName: serviceName,
-		StartDate:   startDate,
-		EndDate:     endDate,
-	}
+	filter.StartDate = startDate
+	filter.EndDate = endDate
 
 	ctx := r.Context()
 	totalPrice, err := c.service.GetSubscriptionsTotalSumFilter(ctx, filter)
